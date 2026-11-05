@@ -3,12 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Audio Studio - Separation & Realtime SRT Generator</title>
-    <!-- Thư viện AI Transformers.js chạy Whisper trực tiếp trên trình duyệt Web -->
-    <script type="module">
-        import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
-        window.WhisperPipeline = pipeline;
-    </script>
+    <title>AI Audio Studio - Realtime SRT Editor</title>
     <style>
         :root {
             --bg-color: #0d1117;
@@ -47,13 +42,12 @@
 
         header {
             text-align: center;
-            padding: 8px 0;
+            padding: 6px 0;
         }
 
         header h1 {
             font-size: 1.3rem;
             color: #fff;
-            margin-bottom: 4px;
         }
 
         header p {
@@ -83,9 +77,9 @@
             font-weight: 600;
         }
 
-        input[type="file"] {
+        input[type="file"], textarea {
             font-size: 0.85rem;
-            color: var(--text-muted);
+            color: var(--text-main);
             background: #21262d;
             padding: 8px;
             border-radius: 6px;
@@ -93,12 +87,17 @@
             width: 100%;
         }
 
+        textarea {
+            height: 80px;
+            resize: vertical;
+        }
+
         .btn {
             background: #238636;
             color: #ffffff;
             border: none;
-            padding: 10px 14px;
-            font-size: 0.9rem;
+            padding: 10px 12px;
+            font-size: 0.85rem;
             font-weight: 600;
             border-radius: 6px;
             cursor: pointer;
@@ -106,7 +105,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 6px;
         }
 
         .btn:disabled {
@@ -121,7 +120,7 @@
 
         canvas {
             width: 100%;
-            height: 90px;
+            height: 80px;
             background: #000;
             border-radius: 8px;
         }
@@ -135,50 +134,47 @@
             background: var(--card-bg);
             border-radius: 12px;
             border: 1px solid #30363d;
-            height: 250px;
+            height: 260px;
             overflow-y: auto;
-            padding: 16px;
-            position: relative;
-            scroll-behavior: smooth;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .lyric-line {
+        .lyric-item {
+            display: flex;
+            flex-direction: column;
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 6px 10px;
+            transition: 0.2s ease;
+        }
+
+        .lyric-item.active {
+            border-color: var(--accent-color);
+            background: rgba(88, 166, 255, 0.15);
+        }
+
+        .lyric-time {
+            font-size: 0.7rem;
+            color: var(--accent-color);
+            margin-bottom: 2px;
+        }
+
+        .lyric-input {
+            background: transparent;
+            border: none;
+            color: #fff;
             font-size: 0.95rem;
-            padding: 8px 10px;
-            margin: 4px 0;
-            border-radius: 6px;
-            color: var(--text-muted);
-            transition: all 0.2s ease;
-            text-align: center;
-        }
-
-        .lyric-line.active {
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 1.1rem;
-            background-color: rgba(88, 166, 255, 0.18);
-            border-left: 4px solid var(--accent-color);
-        }
-
-        .progress-bar-container {
             width: 100%;
-            background-color: #21262d;
-            border-radius: 6px;
-            height: 8px;
-            overflow: hidden;
-            display: none;
-        }
-
-        .progress-bar {
-            width: 0%;
-            height: 100%;
-            background-color: var(--accent-color);
-            transition: width 0.3s ease;
+            outline: none;
         }
 
         .action-row {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
         .action-row .btn {
@@ -196,46 +192,49 @@
 
 <div class="container">
     <header>
-        <h1>🎵 AI Audio Analyzer & SRT Generator</h1>
-        <p>Phân tích phổ nhạc & Trích xuất phụ đề tự động trên Web</p>
+        <h1>🎵 AI Audio & SRT Sync Studio</h1>
+        <p>Phân tích mốc thời gian & Khớp lời bài hát tự động</p>
     </header>
 
-    <!-- 1. Tải Tệp -->
+    <!-- 1. Tải Audio & Tạo mốc -->
     <div class="card">
         <div class="file-input-group">
-            <label for="audioFile">1. Chọn file Âm thanh (.mp3, .wav, .m4a, .aac):</label>
-            <input type="file" id="audioFile" accept="audio/*, .mp3, .wav, .m4a, .aac, .ogg, audio/mp3, audio/wav, audio/x-wav">
+            <label for="audioFile">1. Chọn file Âm thanh (.wav, .mp3, .m4a):</label>
+            <input type="file" id="audioFile" accept="audio/*, .mp3, .wav, .m4a">
         </div>
 
-        <div class="action-row">
-            <button id="btnAiTranscribe" class="btn btn-secondary" disabled>✨ Tự động nhận diện & Tạo file .SRT từ MP3</button>
-        </div>
-
-        <div class="progress-bar-container" id="progressContainer">
-            <div class="progress-bar" id="progressBar"></div>
-        </div>
-        <div class="status-box" id="statusDisplay">Hãy chọn file nhạc để bắt đầu...</div>
-
-        <div class="file-input-group" style="margin-top: 6px;">
-            <label for="srtFile">2. Hoặc tải file phụ đề (.srt) có sẵn:</label>
-            <input type="file" id="srtFile" accept=".srt">
-        </div>
+        <button id="btnGenTime" class="btn btn-secondary" disabled>⚡ 1. Tạo mốc thời gian từ tiếng hát</button>
+        <div class="status-box" id="statusDisplay">Chọn file nhạc để bắt đầu...</div>
     </div>
 
-    <!-- 2. Trực quan hóa & Trình phát -->
+    <!-- 2. Dán lời bài hát -->
+    <div class="card">
+        <div class="file-input-group">
+            <label for="rawLyrics">2. Dán lời bài hát vào đây (Mỗi câu 1 dòng):</label>
+            <textarea id="rawLyrics" placeholder="Dán bài hát tiếng Việt vào đây...
+Ví dụ:
+Thương em con nước vơi đầy
+Mấy sông cũng lội mấy đèo cũng qua"></textarea>
+        </div>
+        <button id="btnApplyLyrics" class="btn" disabled>📝 2. Khớp lời vào mốc .SRT</button>
+    </div>
+
+    <!-- 3. Trình phát & Trực quan hóa -->
     <div class="card">
         <canvas id="visualizerCanvas"></canvas>
         <audio id="audioPlayer" controls webkit-playsinline playsinline></audio>
     </div>
 
-    <!-- 3. Khung hiển thị & Tải file .SRT -->
+    <!-- 4. Danh sách dòng lời & Xuất SRT -->
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.85rem; font-weight: 600; color: var(--accent-color);">Lời bài hát (.SRT)</span>
+            <span style="font-size: 0.85rem; font-weight: 600; color: var(--accent-color);">Lời bài hát (Bấm vào chữ để sửa)</span>
             <button id="btnDownloadSrt" class="btn" style="padding: 4px 10px; font-size: 0.75rem;" disabled>📥 Tải file .SRT</button>
         </div>
         <div class="lyrics-card" id="lyricsContainer">
-            <div class="lyric-line" style="margin-top: 70px;">Tải nhạc MP3/WAV và nhấn nút "Tự động nhận diện" để tạo phụ đề.</div>
+            <div style="text-align: center; color: var(--text-muted); padding-top: 80px; font-size: 0.85rem;">
+                Các dòng phụ đề sẽ xuất hiện tại đây...
+            </div>
         </div>
     </div>
 </div>
@@ -243,85 +242,59 @@
 <script>
     const audioPlayer = document.getElementById('audioPlayer');
     const audioFileInput = document.getElementById('audioFile');
-    const srtFileInput = document.getElementById('srtFile');
-    const btnAiTranscribe = document.getElementById('btnAiTranscribe');
+    const btnGenTime = document.getElementById('btnGenTime');
+    const btnApplyLyrics = document.getElementById('btnApplyLyrics');
     const btnDownloadSrt = document.getElementById('btnDownloadSrt');
+    const rawLyricsInput = document.getElementById('rawLyrics');
     const lyricsContainer = document.getElementById('lyricsContainer');
+    const statusDisplay = document.getElementById('statusDisplay');
     const canvas = document.getElementById('visualizerCanvas');
     const canvasCtx = canvas.getContext('2d');
-    const statusDisplay = document.getElementById('statusDisplay');
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
 
     let parsedSubtitles = [];
     let currentAudioFile = null;
     let audioCtx, analyser, source, dataArray;
     let isAudioCtxInit = false;
 
-    // 1. Tải Audio (Tối ưu tương thích iOS / Android)
+    // 1. Chọn file Audio
     audioFileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
             currentAudioFile = file;
-            const url = URL.createObjectURL(file);
-            audioPlayer.src = url;
-            btnAiTranscribe.disabled = false;
-            statusDisplay.innerText = `Đã chọn: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            audioPlayer.src = URL.createObjectURL(file);
+            btnGenTime.disabled = false;
+            statusDisplay.innerText = `Đã chọn: ${file.name}`;
             resizeCanvas();
         }
     });
 
-    // 2. Tải File SRT
-    srtFileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                parseAndRenderSRT(evt.target.result);
-                statusDisplay.innerText = "Đã nhận file .SRT từ máy";
-            };
-            reader.readAsText(file);
-        }
-    });
-
-    // 3. AI Tự động nhận diện âm thanh & Tạo file .SRT
-    btnAiTranscribe.addEventListener('click', async () => {
+    // 2. Tạo mốc thời gian tự động (VAD)
+    btnGenTime.addEventListener('click', async () => {
         if (!currentAudioFile) return;
-
-        btnAiTranscribe.disabled = true;
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '10%';
-        statusDisplay.innerText = "⏳ Đang khởi động mô hình AI Whisper (Vui lòng đợi giây lát)...";
+        statusDisplay.innerText = "⏳ Đang phân tích âm phổ & tạo mốc thời gian...";
+        btnGenTime.disabled = true;
 
         try {
-            // Chuyển Audio thành AudioBuffer bằng Web Audio API
             const arrayBuffer = await currentAudioFile.arrayBuffer();
-            const tempAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const audioBuffer = await tempAudioCtx.decodeAudioData(arrayBuffer);
-            
-            progressBar.style.width = '40%';
-            statusDisplay.innerText = "⚡ Đang phân tích giọng hát & tạo mốc thời gian thời gian thực...";
+            const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
 
-            // Phân tích khoảng lặng (VAD) để tự động tạo mốc thời gian SRT chuẩn xác
-            const generatedSrt = autoGenerateSrtFromAudio(audioBuffer);
-            
-            progressBar.style.width = '100%';
-            statusDisplay.innerText = "✅ Đã tạo phụ đề .SRT thành công!";
-            
-            parseAndRenderSRT(generatedSrt);
+            parsedSubtitles = generateTimestamps(audioBuffer);
+            renderSubtitles();
+
+            statusDisplay.innerText = `✅ Đã tạo ${parsedSubtitles.length} mốc thời gian! Hãy dán lời bài hát bước 2.`;
+            btnApplyLyrics.disabled = false;
             btnDownloadSrt.disabled = false;
-
         } catch (err) {
             console.error(err);
-            statusDisplay.innerText = "❌ Lỗi xử lý âm thanh. Vui lòng thử file MP3/WAV khác.";
+            statusDisplay.innerText = "❌ Lỗi đọc âm thanh. Thử file WAV/MP3 khác.";
         } finally {
-            btnAiTranscribe.disabled = false;
-            setTimeout(() => { progressContainer.style.display = 'none'; }, 2000);
+            btnGenTime.disabled = false;
         }
     });
 
-    // Thuật toán VAD: Tự động phát hiện khoảng hát & nghỉ trong MP3/WAV để cắt câu SRT
-    function autoGenerateSrtFromAudio(audioBuffer) {
+    // Thuật toán VAD tách mốc thời gian
+    function generateTimestamps(audioBuffer) {
         const pcmData = audioBuffer.getChannelData(0);
         const sampleRate = audioBuffer.sampleRate;
         const chunkSize = Math.floor(sampleRate * 0.1); // 100ms
@@ -330,7 +303,7 @@
         let segments = [];
         let isSpeech = false;
         let speechStart = 0;
-        const energyThreshold = 0.02; // Tự động phát hiện cao độ giọng
+        const energyThreshold = 0.02;
 
         for (let i = 0; i < totalChunks; i++) {
             let sum = 0;
@@ -344,103 +317,81 @@
                 isSpeech = true;
                 speechStart = time;
             } else if (rms <= energyThreshold && isSpeech) {
-                if (time - speechStart > 1.0) { // Tối thiểu 1 giây
-                    segments.push({ start: speechStart, end: time });
+                if (time - speechStart > 1.2) {
+                    segments.push({ start: speechStart, end: time, text: "" });
                 }
                 isSpeech = false;
             }
         }
 
         if (segments.length === 0) {
-            // Fallback nếu bài hát quá nhỏ: chia đều 4 giây / câu
             const duration = audioBuffer.duration;
             for (let t = 0; t < duration; t += 4) {
-                segments.push({ start: t, end: Math.min(t + 3.8, duration) });
+                segments.push({ start: t, end: Math.min(t + 3.8, duration), text: "" });
             }
         }
 
-        // Tạo chuỗi định dạng file .SRT
-        let srtText = "";
-        segments.forEach((seg, idx) => {
-            srtText += `${idx + 1}\n`;
-            srtText += `${formatSrtTime(seg.start)} --> ${formatSrtTime(seg.end)}\n`;
-            srtText += `[Câu hát / Lời nhạc ${idx + 1}]\n\n`;
-        });
-
-        return srtText;
+        return segments;
     }
 
-    function formatSrtTime(seconds) {
-        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
-        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
-        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
-        const ms = Math.floor((seconds - Math.floor(seconds)) * 1000).toString().padStart(3, '0');
-        return `${h}:${m}:${s},${ms}`;
-    }
+    // 3. Khớp lời dán vào mốc thời gian
+    btnApplyLyrics.addEventListener('click', () => {
+        const text = rawLyricsInput.value.trim();
+        if (!text) return;
 
-    // 4. Giải mã & Hiển thị SRT
-    function parseSRT(data) {
-        const regex = /(\d+)\n(\d{2}:\d{2}:\d{2}[,\.]\d{3}) --> (\d{2}:\d{2}:\d{2}[,\.]\d{3})\n([\s\S]*?)(?=\n\n|\n*$)/g;
-        const result = [];
-        let match;
-        while ((match = regex.exec(data.replace(/\r/g, ''))) !== null) {
-            result.push({
-                id: match[1],
-                start: timeToSeconds(match[2]),
-                end: timeToSeconds(match[3]),
-                text: match[4].trim()
-            });
-        }
-        return result;
-    }
-
-    function timeToSeconds(timeStr) {
-        const parts = timeStr.split(/[:,]/);
-        return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2]) + parseInt(parts[3]) / 1000;
-    }
-
-    function parseAndRenderSRT(srtText) {
-        parsedSubtitles = parseSRT(srtText);
-        lyricsContainer.innerHTML = '';
-
-        parsedSubtitles.forEach((sub, index) => {
-            const div = document.createElement('div');
-            div.className = 'lyric-line';
-            div.id = `sub-${index}`;
-            div.innerText = sub.text;
-            lyricsContainer.appendChild(div);
-        });
-        btnDownloadSrt.disabled = false;
-    }
-
-    // 5. Tải File .SRT về máy
-    btnDownloadSrt.addEventListener('click', () => {
-        if (parsedSubtitles.length === 0) return;
-        let content = "";
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        
         parsedSubtitles.forEach((sub, idx) => {
-            content += `${idx + 1}\n${formatSrtTime(sub.start)} --> ${formatSrtTime(sub.end)}\n${sub.text}\n\n`;
+            if (idx < lines.length) {
+                sub.text = lines[idx];
+            } else if (!sub.text) {
+                sub.text = `[Lời nhạc ${idx + 1}]`;
+            }
         });
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `lyric_${Date.now()}.srt`;
-        a.click();
+
+        renderSubtitles();
+        statusDisplay.innerText = "🎉 Đã khớp lời bài hát thành công!";
     });
 
-    // 6. Đồng bộ Lyric Realtime khi Audio phát
+    // 4. Hiển thị & Cho phép chỉnh sửa chữ trực tiếp
+    function renderSubtitles() {
+        lyricsContainer.innerHTML = '';
+        parsedSubtitles.forEach((sub, idx) => {
+            const item = document.createElement('div');
+            item.className = 'lyric-item';
+            item.id = `sub-item-${idx}`;
+
+            const timeLabel = document.createElement('div');
+            timeLabel.className = 'lyric-time';
+            timeLabel.innerText = `${formatSrtTime(sub.start)} --> ${formatSrtTime(sub.end)}`;
+
+            const input = document.createElement('input');
+            input.className = 'lyric-input';
+            input.value = sub.text || `[Lời nhạc ${idx + 1}]`;
+            input.addEventListener('input', (e) => {
+                parsedSubtitles[idx].text = e.target.value;
+            });
+
+            item.appendChild(timeLabel);
+            item.appendChild(input);
+            lyricsContainer.appendChild(item);
+        });
+    }
+
+    // 5. Đồng bộ cuộn lời khi phát nhạc
     audioPlayer.addEventListener('timeupdate', () => {
         const currentTime = audioPlayer.currentTime;
-        let activeIndex = -1;
+        let activeIdx = -1;
 
         for (let i = 0; i < parsedSubtitles.length; i++) {
             if (currentTime >= parsedSubtitles[i].start && currentTime <= parsedSubtitles[i].end) {
-                activeIndex = i;
+                activeIdx = i;
                 break;
             }
         }
 
-        document.querySelectorAll('.lyric-line').forEach((el, idx) => {
-            if (idx === activeIndex) {
+        document.querySelectorAll('.lyric-item').forEach((el, idx) => {
+            if (idx === activeIdx) {
                 if (!el.classList.contains('active')) {
                     el.classList.add('active');
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -451,7 +402,27 @@
         });
     });
 
-    // 7. Visualizer
+    // 6. Xuất File .SRT
+    btnDownloadSrt.addEventListener('click', () => {
+        let content = "";
+        parsedSubtitles.forEach((sub, idx) => {
+            content += `${idx + 1}\n${formatSrtTime(sub.start)} --> ${formatSrtTime(sub.end)}\n${sub.text || '...'}\n\n`;
+        });
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `karaoke_${Date.now()}.srt`;
+        a.click();
+    });
+
+    function formatSrtTime(seconds) {
+        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        const ms = Math.floor((seconds - Math.floor(seconds)) * 1000).toString().padStart(3, '0');
+        return `${h}:${m}:${s},${ms}`;
+    }
+
     function resizeCanvas() {
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
